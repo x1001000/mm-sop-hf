@@ -7,15 +7,29 @@ from google import genai
 from google.genai import types
 client = genai.Client()
 
-def respond(
-    message,
+def answer(
+    question,
     history: list[dict[str, str]],
 ):
-    # MCP service is memoryless - only use the current message
-    response = client.models.generate_content(
+    """Answer questions about MacroMicro internal Standard Operating Procedures (SOP).
+
+    Uses FileSearch to retrieve relevant information from the SOP documentation
+    and provides detailed answers to help team members understand workflows and procedures.
+
+    Args:
+        question: The question about SOP procedures
+        history: Conversation history (note: service is memoryless, only current question is used)
+
+    Yields:
+        Detailed answer based on retrieved SOP documentation
+    """
+    # Memoryless service - only use the current question
+    # Stream the response for better UX
+    response_stream = client.models.generate_content_stream(
         model="gemini-2.5-pro",
-        contents=message,
+        contents=question,
         config=types.GenerateContentConfig(
+            system_instruction="你的任務：依據FileSearch工具檢索到的資料，詳細回答MacroMicro團隊內部標準作業流程（SOP）相關問題",
             tools=[
                 types.Tool(
                     file_search=types.FileSearch(
@@ -26,20 +40,24 @@ def respond(
         )
     )
 
-    # Extract and return the response text
-    result = response.text if hasattr(response, 'text') else str(response)
-    yield result
+    # Stream response chunks as they arrive
+    accumulated_text = ""
+    for chunk in response_stream:
+        if hasattr(chunk, 'text') and chunk.text:
+            accumulated_text += chunk.text
+            yield accumulated_text
 
 
 """
 For information on how to customize the ChatInterface, peruse the gradio docs: https://www.gradio.app/docs/chatinterface
 """
 chatbot = gr.ChatInterface(
-    respond,
+    answer,
     type="messages",
+    title="Hi, MMer 👋",
 )
 
-with gr.Blocks() as demo:
+with gr.Blocks(fill_height=True, title="MM SOP") as demo:
     chatbot.render()
 
 if __name__ == "__main__":
