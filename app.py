@@ -28,7 +28,7 @@ async def _patched_call(self, scope, receive, send):
 starlette.middleware.base.BaseHTTPMiddleware.__call__ = _patched_call
 
 
-def answer(message, history):
+def answer(message, history=None):
     """Answer questions about MacroMicro internal Standard Operating Procedures (SOP).
 
     Uses FileSearch to retrieve relevant information from the SOP documentation
@@ -36,7 +36,7 @@ def answer(message, history):
 
     Args:
         message: The question about SOP procedures
-        history: Chat history (unused - this is a memoryless service)
+        history: Chat history (unused - this is a memoryless service), defaults to None
 
     Yields:
         Detailed answer based on retrieved SOP documentation
