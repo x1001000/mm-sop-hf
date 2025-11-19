@@ -11,16 +11,10 @@ def respond(
     message,
     history: list[dict[str, str]],
 ):
-    user_message = ''
-    for msg in history:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        user_message += f"{role}: {content}\n"
-    user_message += f"user: {message}"
-
+    # MCP service is memoryless - only use the current message
     response = client.models.generate_content(
         model="gemini-2.5-pro",
-        contents=user_message,
+        contents=message,
         config=types.GenerateContentConfig(
             tools=[
                 types.Tool(
