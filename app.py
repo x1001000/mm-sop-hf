@@ -26,7 +26,7 @@ def answer(
     # Memoryless service - only use the current question
     # Stream the response for better UX
     response_stream = client.models.generate_content_stream(
-        model="gemini-2.5-pro",
+        model="gemini-2.5-flash",
         contents=question,
         config=types.GenerateContentConfig(
             system_instruction="你的任務：依據FileSearch工具檢索到的資料，詳細回答MacroMicro團隊內部標準作業流程（SOP）相關問題",
