@@ -1,43 +1,40 @@
-import gradio as gr
-from huggingface_hub import InferenceClient
+import dotenv
+dotenv.load_dotenv()
 
+import gradio as gr
+
+from google import genai
+from google.genai import types
+client = genai.Client()
 
 def respond(
     message,
     history: list[dict[str, str]],
-    system_message,
-    max_tokens,
-    temperature,
-    top_p,
-    hf_token: gr.OAuthToken,
 ):
-    """
-    For more information on `huggingface_hub` Inference API support, please check the docs: https://huggingface.co/docs/huggingface_hub/v0.22.2/en/guides/inference
-    """
-    client = InferenceClient(token=hf_token.token, model="openai/gpt-oss-20b")
+    user_message = ''
+    for msg in history:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        user_message += f"{role}: {content}\n"
+    user_message += f"user: {message}"
 
-    messages = [{"role": "system", "content": system_message}]
+    response = client.models.generate_content(
+        model="gemini-2.5-pro",
+        contents=user_message,
+        config=types.GenerateContentConfig(
+            tools=[
+                types.Tool(
+                    file_search=types.FileSearch(
+                        file_search_store_names=[client.file_search_stores.list()[0].name]
+                    )
+                )
+            ]
+        )
+    )
 
-    messages.extend(history)
-
-    messages.append({"role": "user", "content": message})
-
-    response = ""
-
-    for message in client.chat_completion(
-        messages,
-        max_tokens=max_tokens,
-        stream=True,
-        temperature=temperature,
-        top_p=top_p,
-    ):
-        choices = message.choices
-        token = ""
-        if len(choices) and choices[0].delta.content:
-            token = choices[0].delta.content
-
-        response += token
-        yield response
+    # Extract and return the response text
+    result = response.text if hasattr(response, 'text') else str(response)
+    yield result
 
 
 """
@@ -46,25 +43,10 @@ For information on how to customize the ChatInterface, peruse the gradio docs: h
 chatbot = gr.ChatInterface(
     respond,
     type="messages",
-    additional_inputs=[
-        gr.Textbox(value="You are a friendly Chatbot.", label="System message"),
-        gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens"),
-        gr.Slider(minimum=0.1, maximum=4.0, value=0.7, step=0.1, label="Temperature"),
-        gr.Slider(
-            minimum=0.1,
-            maximum=1.0,
-            value=0.95,
-            step=0.05,
-            label="Top-p (nucleus sampling)",
-        ),
-    ],
 )
 
 with gr.Blocks() as demo:
-    with gr.Sidebar():
-        gr.LoginButton()
     chatbot.render()
 
-
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(mcp_server=True)

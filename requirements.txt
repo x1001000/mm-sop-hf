@@ -1,0 +1,3 @@
+python-dotenv
+gradio[mcp]
+google-genai
