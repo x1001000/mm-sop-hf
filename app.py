@@ -43,8 +43,18 @@ def answer(
     # Stream response chunks as they arrive
     accumulated_text = ""
     for chunk in response_stream:
-        if hasattr(chunk, 'text') and chunk.text:
-            accumulated_text += chunk.text
+        # Handle chunks that may contain non-text parts (e.g., executable_code)
+        chunk_text = ""
+        if hasattr(chunk, 'candidates') and chunk.candidates:
+            for candidate in chunk.candidates:
+                if hasattr(candidate, 'content') and candidate.content and hasattr(candidate.content, 'parts'):
+                    for part in candidate.content.parts:
+                        if hasattr(part, 'text') and part.text:
+                            chunk_text += part.text
+
+        if chunk_text:
+            print(f"Streamed chunk: {chunk_text}")
+            accumulated_text += chunk_text
             yield accumulated_text
 
 
@@ -61,4 +71,4 @@ with gr.Blocks(fill_height=True, title="MM SOP") as demo:
     chatbot.render()
 
 if __name__ == "__main__":
-    demo.launch(mcp_server=True)
+    demo.launch(mcp_server=True, share=True)
