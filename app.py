@@ -28,18 +28,15 @@ async def _patched_call(self, scope, receive, send):
 starlette.middleware.base.BaseHTTPMiddleware.__call__ = _patched_call
 
 
-def answer(
-    question,
-    history: list[dict[str, str]],
-):
+def answer(message, history):
     """Answer questions about MacroMicro internal Standard Operating Procedures (SOP).
 
     Uses FileSearch to retrieve relevant information from the SOP documentation
     and provides detailed answers to help team members understand workflows and procedures.
 
     Args:
-        question: The question about SOP procedures
-        history: Conversation history (note: service is memoryless, only current question is used)
+        message: The question about SOP procedures
+        history: Chat history (unused - this is a memoryless service)
 
     Yields:
         Detailed answer based on retrieved SOP documentation
@@ -48,7 +45,7 @@ def answer(
     # Stream the response for better UX
     response_stream = client.models.generate_content_stream(
         model="gemini-2.5-flash",
-        contents=question,
+        contents=message,
         config=types.GenerateContentConfig(
             system_instruction="你的任務：依據FileSearch工具檢索到的資料，詳細回答MacroMicro團隊內部標準作業流程（SOP）相關問題",
             tools=[
