@@ -71,4 +71,4 @@ with gr.Blocks(fill_height=True, title="MM SOP") as demo:
     chatbot.render()
 
 if __name__ == "__main__":
-    demo.launch(mcp_server=True, share=True)
+    demo.launch(mcp_server=True)
