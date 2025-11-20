@@ -86,8 +86,9 @@ def answer(message: str, history: list):
 For information on how to customize the ChatInterface, peruse the gradio docs: https://www.gradio.app/docs/chatinterface
 """
 with gr.Blocks(fill_height=True, title="MM SOP") as demo:
-    chatbot = gr.Chatbot()
-    msg = gr.Textbox()
+    gr.Markdown("# Hi, MMer 👋")
+    chatbot = gr.Chatbot(label='MM SOP', height=500)
+    msg = gr.Textbox(label='Enter your question about MacroMicro SOPs:')
     clear = gr.ClearButton([msg, chatbot])
 
     def respond(message, chat_history):
