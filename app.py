@@ -92,6 +92,18 @@ with gr.Blocks(fill_height=True, title="MM SOP") as demo:
     clear = gr.ClearButton([msg, chatbot])
 
     def respond(message, chat_history):
+        """Answer questions about MacroMicro internal Standard Operating Procedures (SOP).
+
+        Uses FileSearch to retrieve relevant information from the SOP documentation
+        and provides detailed answers to help team members understand workflows and procedures.
+
+        Args:
+            message: The current input message from the user.
+            chat_history: Chat history in Gradio format.
+
+        Yields:
+            Updated message and chat history.
+        """
         chat_history.append((message, ""))
         for chunk in answer(message, chat_history):
             chat_history[-1] = (message, chat_history[-1][1] + chunk)
