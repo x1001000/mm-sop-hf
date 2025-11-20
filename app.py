@@ -111,19 +111,25 @@ def answer(message: str, history: list = None):
 
     try:
         for chunk in response_stream:
-            if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
-                for part in chunk.candidates[0].content.parts:
-                    if hasattr(part, 'text') and part.text:
-                        print(f"Streamed chunk: {part.text}")
-                        accumulated_text += part.text
-                        has_yielded = True
-                        # Yield in Gradio messages format (required for type="messages")
-                        yield {"role": "assistant", "content": accumulated_text}
-                    elif hasattr(part, 'function_call'):
-                        # With file_search, tool calling is automatic. We log this for debugging.
-                        if part.function_call and part.function_call.name:
-                            print(f"Received tool call part: {part.function_call.name}")
-                        # The response to the tool call will be in subsequent chunks.
+            chunk_text = ""
+            if hasattr(chunk, 'candidates') and chunk.candidates:
+                for candidate in chunk.candidates:
+                    if hasattr(candidate, 'content') and candidate.content and hasattr(candidate.content, 'parts'):
+                        for part in candidate.content.parts:
+                            if hasattr(part, 'text') and part.text:
+                                chunk_text += part.text
+                            elif hasattr(part, 'function_call'):
+                                # With file_search, tool calling is automatic. Log for debugging.
+                                if part.function_call and part.function_call.name:
+                                    print(f"Received tool call part: {part.function_call.name}")
+                                # The response to the tool call will be in subsequent chunks.
+
+            if chunk_text:
+                print(f"Streamed chunk: {chunk_text}")
+                accumulated_text += chunk_text
+                has_yielded = True
+                # Yield in Gradio messages format (required for type="messages")
+                yield {"role": "assistant", "content": accumulated_text}
     except Exception as e:
         print(f"Error during streaming: {e}")
         import traceback
