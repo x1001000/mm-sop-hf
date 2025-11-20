@@ -109,25 +109,16 @@ def answer(message: str, history: list = None):
 
     try:
         for chunk in response_stream:
-            chunk_text = ""
-            if hasattr(chunk, 'candidates') and chunk.candidates:
-                for candidate in chunk.candidates:
-                    if hasattr(candidate, 'content') and candidate.content and hasattr(candidate.content, 'parts'):
-                        for part in candidate.content.parts:
-                            if hasattr(part, 'text') and part.text:
-                                chunk_text += part.text
-                            elif hasattr(part, 'function_call'):
-                                # With file_search, tool calling is automatic. Log for debugging.
-                                if part.function_call and part.function_call.name:
-                                    print(f"Received tool call part: {part.function_call.name}")
-                                # The response to the tool call will be in subsequent chunks.
-
-            if chunk_text:
-                print(f"Streamed chunk: {chunk_text}")
-                accumulated_text += chunk_text
-                has_yielded = True
-                # Yield in Gradio messages format (required for type="messages")
-                yield {"role": "assistant", "content": accumulated_text}
+            try:
+                if chunk.text:
+                    accumulated_text += chunk.text
+                    has_yielded = True
+                    yield {"role": "assistant", "content": accumulated_text}
+            except ValueError:
+                # This error is expected if the chunk contains a function call instead of text.
+                # The Gemini API handles the tool call automatically; we just need to ignore this chunk.
+                print("Ignoring chunk with function call.")
+                continue
     except Exception as e:
         print(f"Error during streaming: {e}")
         import traceback
