@@ -7,13 +7,11 @@ from google import genai
 from google.genai import types
 client = genai.Client()
 
-import time
-while True:
-    time.sleep(1)
-    file_search_stores = client.file_search_stores.list()
-    if file_search_stores:
-        file_search_store = file_search_stores[0]
-        break
+# Get the file search store
+file_search_stores = client.file_search_stores.list()
+if not file_search_stores:
+    raise ValueError("No file search stores found. Please create one in the Google AI Studio.")
+file_search_store = file_search_stores[0]
 
 # Patch Starlette middleware to handle the ASGI message issue
 # This fixes the "Unexpected message" AssertionError in MCP server
@@ -36,120 +34,69 @@ async def _patched_call(self, scope, receive, send):
 starlette.middleware.base.BaseHTTPMiddleware.__call__ = _patched_call
 
 
-def answer(message: str, history: list = None):
+def answer(message: str, history: list):
     """Answer questions about MacroMicro internal Standard Operating Procedures (SOP).
 
     Uses FileSearch to retrieve relevant information from the SOP documentation
     and provides detailed answers to help team members understand workflows and procedures.
 
     Args:
-        message: The current input message from the user (string when type="messages")
-        history: Chat history in Gradio format (list of dicts with "role" and "content" keys). Optional, defaults to None.
+        message: The current input message from the user.
+        history: Chat history in Gradio format.
 
     Yields:
-        Detailed answer based on retrieved SOP documentation (dict with "role" and "content" when type="messages")
+        A stream of strings with the answer.
     """
     # Convert Gradio messages format to Gemini API format
-    # Gradio format: [{"role": "user" | "assistant", "content": str}, ...]
-    # Gemini format: [{"role": "user" | "model", "parts": [{"text": str}]}, ...]
-
     gemini_contents = []
-
-    # Handle history parameter - ensure it's a list
-    if history and isinstance(history, list):
-        for msg in history:
-            # Skip invalid messages
-            if not isinstance(msg, dict):
-                continue
-
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-
-            # Convert Gradio "assistant" role to Gemini "model" role
-            gemini_role = "model" if role == "assistant" else "user"
-
-            gemini_contents.append({
-                "role": gemini_role,
-                "parts": [{"text": content}]
-            })
-
-    # Add the current user message
-    if message:
-        gemini_contents.append({
-            "role": "user",
-            "parts": [{"text": message}]
-        })
-
-    if not gemini_contents:
-        yield {"role": "assistant", "content": "Please provide a question."}
-        return
+    for user_msg, ai_msg in history:
+        gemini_contents.append({"role": "user", "parts": [{"text": user_msg}]})
+        gemini_contents.append({"role": "model", "parts": [{"text": ai_msg}]})
+    gemini_contents.append({"role": "user", "parts": [{"text": message}]})
 
     # Stream the response for better UX
-    try:
-        response_stream = client.models.generate_content_stream(
-            model="gemini-2.5-flash",
-            contents=gemini_contents,
-            config=types.GenerateContentConfig(
-                system_instruction="你的任務：依據FileSearch工具檢索到的資料，詳細回答MacroMicro團隊內部標準作業流程（SOP）相關問題",
-                tools=[
-                    types.Tool(
-                        file_search=types.FileSearch(
-                            file_search_store_names=[file_search_store.name]
-                        )
+    response_stream = client.models.generate_content_stream(
+        model="gemini-2.5-flash",
+        contents=gemini_contents,
+        config=types.GenerateContentConfig(
+            system_instruction="你的任務：依據FileSearch工具檢索到的資料，詳細回答MacroMicro團隊內部標準作業流程（SOP）相關問題",
+            tools=[
+                types.Tool(
+                    file_search=types.FileSearch(
+                        file_search_store_names=[file_search_store.name]
                     )
-                ]
-            )
+                )
+            ]
         )
-    except Exception as e:
-        print(f"Error creating response stream: {e}")
-        yield {"role": "assistant", "content": f"Error connecting to AI service: {str(e)}"}
-        return
+    )
 
     # Stream response chunks as they arrive
-    accumulated_text = ""
-    has_yielded = False
-
-    try:
-        for chunk in response_stream:
-            if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
-                for part in chunk.candidates[0].content.parts:
-                    if hasattr(part, 'text') and part.text:
-                        chunk_text = part.text
-                        print(f"Streamed chunk: {chunk_text}")
-                        accumulated_text += chunk_text
-                        has_yielded = True
-                        # Yield in Gradio messages format (required for type="messages")
-                        yield {"role": "assistant", "content": accumulated_text}
-                    elif hasattr(part, 'function_call'):
-                        # With file_search, tool calling is automatic. We log this for debugging.
-                        print(f"Received tool call part: {part.function_call.name}")
-                        # The response to the tool call will be in subsequent chunks.
-    except Exception as e:
-        print(f"Error during streaming: {e}")
-        import traceback
-        traceback.print_exc()
-        if not has_yielded:
-            yield {"role": "assistant", "content": f"Error generating response: {str(e)}"}
-        else:
-            yield {"role": "assistant", "content": accumulated_text + f"\n\n[Error occurred during generation: {str(e)}]"}
-        return
-
-    # Ensure we always yield at least once
-    if not has_yielded:
-        yield {"role": "assistant", "content": "No response generated. Please try rephrasing your question."}
+    for chunk in response_stream:
+        try:
+            if chunk.text:
+                yield chunk.text
+        except ValueError:
+            # This error is expected if the chunk contains a function call instead of text.
+            # The Gemini API handles the tool call automatically; we just need to ignore this chunk.
+            print("Ignoring chunk with function call.")
+            continue
 
 
 """
 For information on how to customize the ChatInterface, peruse the gradio docs: https://www.gradio.app/docs/chatinterface
 """
-chatbot = gr.ChatInterface(
-    answer,
-    type="messages",
-    title="Hi, MMer 👋",
-)
-
 with gr.Blocks(fill_height=True, title="MM SOP") as demo:
-    chatbot.render()
+    chatbot = gr.Chatbot()
+    msg = gr.Textbox()
+    clear = gr.ClearButton([msg, chatbot])
+
+    def respond(message, chat_history):
+        chat_history.append((message, ""))
+        for chunk in answer(message, chat_history):
+            chat_history[-1] = (message, chat_history[-1][1] + chunk)
+            yield "", chat_history
+
+    msg.submit(respond, [msg, chatbot], [msg, chatbot])
 
 if __name__ == "__main__":
     demo.launch(mcp_server=True)
