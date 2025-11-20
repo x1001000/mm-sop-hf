@@ -34,7 +34,7 @@ async def _patched_call(self, scope, receive, send):
 starlette.middleware.base.BaseHTTPMiddleware.__call__ = _patched_call
 
 
-def answer(message: str, history: list):
+def answer(message: str, history: list[dict]):
     """Answer questions about MacroMicro internal Standard Operating Procedures (SOP).
 
     Uses FileSearch to retrieve relevant information from the SOP documentation
@@ -42,16 +42,18 @@ def answer(message: str, history: list):
 
     Args:
         message: The current input message from the user.
-        history: Chat history in Gradio format.
+        history: Chat history in Gradio messages format.
 
     Yields:
         A stream of strings with the answer.
     """
     # Convert Gradio messages format to Gemini API format
     gemini_contents = []
-    for user_msg, ai_msg in history:
-        gemini_contents.append({"role": "user", "parts": [{"text": user_msg}]})
-        gemini_contents.append({"role": "model", "parts": [{"text": ai_msg}]})
+    for msg in history:
+        if msg["role"] == "user":
+            gemini_contents.append({"role": "user", "parts": [{"text": msg["content"]}]})
+        elif msg["role"] == "assistant":
+            gemini_contents.append({"role": "model", "parts": [{"text": msg["content"]}]})
     gemini_contents.append({"role": "user", "parts": [{"text": message}]})
 
     # Stream the response for better UX
@@ -87,26 +89,26 @@ For information on how to customize the ChatInterface, peruse the gradio docs: h
 """
 with gr.Blocks(fill_height=True, title="MM SOP") as demo:
     gr.Markdown("# Hi, MMer 👋")
-    chatbot = gr.Chatbot(label='MM SOP', height=500)
+    chatbot = gr.Chatbot(label='MM SOP', height=500, type='messages')
     msg = gr.Textbox(label='Enter your question about MacroMicro SOPs:')
     clear = gr.ClearButton([msg, chatbot])
 
-    def respond(message, chat_history):
+    def respond(message: str, chat_history: list[dict]=[]):
         """Answer questions about MacroMicro internal Standard Operating Procedures (SOP).
 
         Uses FileSearch to retrieve relevant information from the SOP documentation
         and provides detailed answers to help team members understand workflows and procedures.
 
-        Args:
-            message: The current input message from the user.
-            chat_history: Chat history in Gradio format.
+        tool input:
+            message: 關於 MacroMicro SOPs 的提問
 
-        Yields:
-            Updated message and chat history.
+        tool output:
+            ('', [{"role": "user", "content": MMer提問}, {"role": "assistant", "content": MM團隊內部SOP}])
         """
-        chat_history.append((message, ""))
+        chat_history.append({"role": "user", "content": message})
+        chat_history.append({"role": "assistant", "content": ""})
         for chunk in answer(message, chat_history):
-            chat_history[-1] = (message, chat_history[-1][1] + chunk)
+            chat_history[-1]["content"] += chunk
             yield "", chat_history
 
     msg.submit(respond, [msg, chatbot], [msg, chatbot])
