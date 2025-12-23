@@ -7,13 +7,11 @@ from google import genai
 from google.genai import types
 client = genai.Client()
 
-# Get the file search store
-file_search_stores = client.file_search_stores.list()
-if not file_search_stores:
-    raise ValueError("No file search stores found. Please create one in the Google AI Studio.")
-for file_search_store in file_search_stores[::-1]:
-    if "mm-sop" in file_search_store.name:
-        break
+def file_search_store():
+    file_search_stores = client.file_search_stores.list()
+    for file_search_store in file_search_stores[::-1]:
+        if "mm-sop" in file_search_store.name:
+            return file_search_store
 
 # Patch Starlette middleware to handle the ASGI message issue
 # This fixes the "Unexpected message" AssertionError in MCP server
@@ -67,7 +65,7 @@ def answer(message: str, history: list[dict]):
             tools=[
                 types.Tool(
                     file_search=types.FileSearch(
-                        file_search_store_names=[file_search_store.name]
+                        file_search_store_names=[file_search_store().name]
                     )
                 )
             ]
