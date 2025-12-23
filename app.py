@@ -11,7 +11,9 @@ client = genai.Client()
 file_search_stores = client.file_search_stores.list()
 if not file_search_stores:
     raise ValueError("No file search stores found. Please create one in the Google AI Studio.")
-file_search_store = file_search_stores[-1]
+for file_search_store in file_search_stores[::-1]:
+    if "mm-sop" in file_search_store.name:
+        break
 
 # Patch Starlette middleware to handle the ASGI message issue
 # This fixes the "Unexpected message" AssertionError in MCP server
